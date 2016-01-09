@@ -124,4 +124,6 @@ main = hspec $ do
                 pending
             it "will return an error value if the rooms are not connected" $ do
                 pending
+            it "will let a person pick something up"
+                pendingWith "future version"
 
