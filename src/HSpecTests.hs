@@ -20,8 +20,8 @@ myIndividual = EI.Individual "ind" "Mr. Blub" "This is mister blub"
 
 myRoom :: ER.Room
 myRoom = ER.Room "room" "A room" "This is a room" ["ind"]
-                [("garage", "Garage"), ("brewery", "Brewery")]
-                [("bitcoin", "Coin"), ("beer", "Beer")]
+                [("Garage", "garage"), ("Brewery", "brewery")]
+                [("Bitcoin", "coin"), ("Beer", "beer")]
 
 main :: IO ()
 main = hspec $ do
@@ -77,10 +77,10 @@ main = hspec $ do
         it "has individuals" $ do
             ER.individual myRoom `shouldBe` ["ind"]
         it "has exits" $ do
-            ER.exits myRoom `shouldBe` [("garage", "Garage"),
-                                        ("brewery", "Brewery")]
+            ER.exits myRoom `shouldBe` [("Garage", "garage"),
+                                        ("Brewery", "brewery")]
         it "has items in it" $ do
-            ER.items myRoom `shouldBe` [("bitcoin", "Coin"), ("beer", "Beer")]
+            ER.items myRoom `shouldBe` [("Bitcoin", "coin"), ("Beer", "beer")]
         it "should be convertable to and from storage" $ do
             (Just myRoom) `shouldBe` EC.fromStorage (EC.toStorage myRoom)
 
@@ -98,7 +98,7 @@ main = hspec $ do
 
     describe "The Base Module" $ do
         context "which can handle rooms and individuals" $ do
-            let room2 = ER.Room "room2" "Room 2" "..." ["anna"] [] []
+            let room2 = ER.Room "brewery" "Room 2" "..." ["anna"] [] []
                 anna = EI.Individual "anna" "Anna" ".." (0, 0) (0, 0) []
                 ingame = EC.storageInsert myIndividual $
                             EC.storageInsert myRoom $
@@ -110,20 +110,24 @@ main = hspec $ do
             it "knows in which room an individual is" $ do
                 EB.roomOfIndividual myIndividual ingame `shouldBe` myRoom
             it "should be able to switch a person to another room" $ do
-                let eitherIngame = EB.beam myIndividual "room2" ingame
+                let eitherIngame = EB.beam myIndividual "brewery" ingame
                 case eitherIngame of
                     Left err -> expectationFailure $ show err
                     Right ingame' -> do
                         let room = EB.roomOfIndividual
                                             myIndividual ingame' :: ER.Room
                             room' = ER.getRoom ingame' "room" :: ER.Room
-                        ER.key room `shouldBe` "room2"
+                        ER.key room `shouldBe` "brewery"
                         ER.individual room' `shouldSatisfy`
                             (\x -> not $ elem "ind" x)
             it "will move a person only if its room is connected by exits" $ do
-                pending
-            it "will return an error value if the rooms are not connected" $ do
-                pending
-            it "will let a person pick something up"
+                let moveStorage = do
+                        ingame' <- EB.move myIndividual "Brewery" ingame
+                        return $ EC.storage ingame'
+                    beamStorage = do
+                        ingame' <- EB.beam myIndividual "brewery" ingame
+                        return $ EC.storage ingame'
+                moveStorage `shouldBe` beamStorage
+            it "will let a person pick something up" $ do
                 pendingWith "future version"
 

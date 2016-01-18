@@ -5,7 +5,8 @@ module Esge.Base (
         individualsInRoom,
         roomOfIndividualId,
         roomOfIndividual,
-        beam
+        beam,
+        move
     ) where
 
 import qualified Esge.Core as EC
@@ -14,6 +15,7 @@ import qualified Esge.Individual as EI
 import Data.Maybe (catMaybes)
 
 data Error = RoomNotFoundError String
+           | ExitNotFound String
     deriving (Show, Read, Eq)
 
 individualsInRoomId :: String -> EC.Ingame -> Maybe [EI.Individual]
@@ -51,3 +53,9 @@ beam ind roomId ingame =
                         EC.storageInsert room' ingame in
         Right ingame'
 
+move :: EI.Individual -> String -> EC.Ingame -> Either Error EC.Ingame
+move ind exitRoom ingame =
+    let fromRoom = roomOfIndividual ind ingame in
+    if exitRoom `elem` (map fst $ ER.exits fromRoom) then
+        beam ind (maybe "" id $ lookup exitRoom $ ER.exits fromRoom) ingame
+    else Left $ ExitNotFound exitRoom
