@@ -65,6 +65,22 @@ player ingame =
 currRoom :: EC.Ingame -> ER.Room
 currRoom ingame = EB.roomOfIndividual (player ingame) ingame
 
+arg :: String -> Int -> String
+arg str i = words str !! i
+
+printError :: EB.Error -> EC.Ingame -> EC.Ingame
+printError err ingame = EC.setIngameResponse "output" (
+    case err of
+        EB.RoomNotFoundError str -> "Room not found: " ++ str
+        EB.ExitNotFoundError str -> "Exit not found: " ++ str
+    ) ingame
+
+moveRoomAction :: String -> EC.Action
+moveRoomAction exitName ingame =
+    case EB.move (player ingame) exitName ingame of
+         Left err -> printError err ingame
+         Right ingame -> ingame
+
 -- Coming next
 -- * actions
 --   * moveRoom
