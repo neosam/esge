@@ -1,18 +1,26 @@
-module Edge.Terminal(
+module Esge.Terminal(
+            -- * Data types
             Command,
             Terminal,
 
+            -- * Static values
             defaultTerminal,
+
+            -- * Flow functions
+            step,
             repl,
+
+            -- * Accessor functions
             addCommand,
             isDone,
             setDone,
-            step,
+            setIngame,
+            ingame,
             findCommand,
             modifyIngame
         ) where
 
-import qualified Edge.Core as EC
+import qualified Esge.Core as EC
 import System.IO
 
 type Command = String -> Terminal -> IO (Terminal, Bool)
@@ -35,6 +43,9 @@ isDone ingame = case EC.storageGet "done" ingame of
     Just _ -> True
     Nothing -> False
 
+setIngame :: EC.Ingame -> Terminal -> Terminal
+setIngame ingame terminal = terminal { ingame = ingame }
+
 setDone :: EC.Ingame -> EC.Ingame
 setDone ingame = EC.storageInsert (EC.StoreBool ("done", True)) ingame
 
@@ -52,10 +63,10 @@ step terminal = do
     command <- getLine
     (terminal', doStep) <- runCommand command terminal
     if not doStep then return terminal'
-    else do
-        let terminal'' = terminal' { ingame = EC.step $ ingame terminal' }
-        putStr $ EC.getIngameResponse "output" $ ingame terminal''
-        return terminal''
+        else do
+            let terminal'' = terminal' { ingame = EC.step $ ingame terminal' }
+            putStr $ EC.getIngameResponse "output" $ ingame terminal''
+            return terminal''
 
 findCommand :: String -> [(String, Command)] -> Maybe Command
 findCommand cmd cmds = if cmd == "" then Nothing

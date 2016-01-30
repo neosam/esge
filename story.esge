@@ -1,0 +1,20 @@
+New state edgeState
+player: susan
+version: 0.1
+name: Test Adventure
+
+New individual susan
+name: Susan
+desc: You are Susan
+health: 100,100
+mana: 0,0
+items:
+
+New room bedroom
+title: Your bedroom
+desc: A very beautiful bedroom
+individual: susan
+exits:
+items:
+
+

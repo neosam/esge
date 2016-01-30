@@ -1,6 +1,8 @@
 module Esge.Individual (
             Individual(Individual, key, name, desc, health, mana, items),
-            getIndividual
+            getIndividual,
+            getIndividualNull,
+            nullIndividual
         ) where
 
 import qualified Esge.Core as EC
@@ -13,6 +15,9 @@ data Individual = Individual {
     mana :: (Int, Int),
     items :: [(String, String)]
 } deriving (Show, Read, Eq)
+
+nullIndividual :: Individual
+nullIndividual = Individual "nullIndividual" "" "" (0, 0) (0, 0) []
 
 mergeIntPair :: String -> (Int, Int) -> String
 mergeIntPair sep (a, b) = show a ++ sep ++ show b
@@ -57,3 +62,7 @@ getIndividual :: EC.Ingame -> String -> Maybe Individual
 getIndividual ingame key = do
     storage <- EC.storageGet key ingame
     EC.fromStorage storage
+
+getIndividualNull :: EC.Ingame -> String -> Individual
+getIndividualNull ingame key =
+    maybe nullIndividual id $ getIndividual ingame key
