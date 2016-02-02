@@ -69,7 +69,7 @@ meta :: Parsec.Parsec String () (String, String)
 meta = do
     key <- keyword
     Parsec.char ':'
-    Parsec.spaces
+    Parsec.many (Parsec.oneOf " \t")
     value <- Parsec.many (Parsec.noneOf "\n\r")
     eol
     return (key, value)

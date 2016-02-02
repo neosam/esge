@@ -53,8 +53,8 @@ instance EC.Storageable Room where
 
 nullRoom = Room {
     key = "nullRoom",
-    title = "",
-    desc = "",
+    title = "Null Room",
+    desc = "If you see this room, you have an error",
     individual = [],
     exits = [],
     items = []

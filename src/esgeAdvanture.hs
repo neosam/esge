@@ -96,6 +96,11 @@ showStateAction :: EC.Action
 showStateAction ingame = EC.setIngameResponse "output" stateText ingame
     where stateText = show $ state ingame
 
+showStorageAction :: EC.Action
+showStorageAction ingame = EC.setIngameResponse "output" stateText ingame
+    where stateText = show $ EC.storage ingame
+
+
 
 ingameCmd :: (String -> EC.Ingame -> EC.Ingame) -> ET.Command
 ingameCmd mod cmd term = return $ (ET.modifyIngame modifier term, True)
@@ -108,6 +113,7 @@ actionCmd action = ingameCmd mod
 actionIngameCmd :: (String -> EC.Ingame -> EC.Action) -> ET.Command
 actionIngameCmd fn cmd term = actionCmd (fn cmd $ ET.ingame term) cmd term
 
+
 showRoomCmd :: ET.Command
 showRoomCmd = actionCmd showRoomAction
 
@@ -117,6 +123,9 @@ showPlayerCmd = actionIngameCmd showPlayer
 
 showStateCmd :: ET.Command
 showStateCmd = actionCmd showStateAction
+
+showStorageCmd :: ET.Command
+showStorageCmd = actionCmd showStorageAction
 
 main = do
     maybeIngame <- preparedIngame
@@ -128,6 +137,8 @@ main = do
                 ET.addCommand "b" showRoomCmd $
                 ET.addCommand "p" showPlayerCmd $
                 ET.addCommand "s" showStateCmd $
+                ET.addCommand "storage" showStorageCmd $
+                ET.setIngame ingame $
                 ET.defaultTerminal
      ET.repl term
      return ()

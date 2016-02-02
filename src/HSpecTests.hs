@@ -95,6 +95,13 @@ main = hspec $ do
                             [("key1", "value1"), ("key2", "value2")],
                         EC.Storage "thingie" "thong" []]
             EP.loadString "(source)" parseStr `shouldBe` (Right dest)
+        it "should parse empty values" $ do
+            let parseStr = "New thing thingie\n" ++
+                           "key1:\n" ++
+                           "key2:a\n\n\n"
+            let dest = [EC.Storage "thingie" "thing"
+                            [("key1", ""), ("key2", "a")]]
+            EP.loadString "(source)" parseStr `shouldBe` (Right dest)
 
     describe "The Base Module" $ do
         context "which can handle rooms and individuals" $ do
