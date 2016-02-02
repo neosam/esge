@@ -71,8 +71,8 @@ arg str i = words str !! i
 printError :: EB.Error -> EC.Ingame -> EC.Ingame
 printError err ingame = EC.setIngameResponse "output" (
     case err of
-        EB.RoomNotFoundError str -> "Room not found: " ++ str
-        EB.ExitNotFoundError str -> "Exit not found: " ++ str
+        EB.RoomNotFoundError str -> "Room not found: '" ++ str ++ "'"
+        EB.ExitNotFoundError str -> "Exit not found: " ++ str ++ "'"
     ) ingame
 
 moveRoomAction :: String -> EC.Action
@@ -99,6 +99,12 @@ showStateAction ingame = EC.setIngameResponse "output" stateText ingame
 showStorageAction :: EC.Action
 showStorageAction ingame = EC.setIngameResponse "output" stateText ingame
     where stateText = show $ EC.storage ingame
+
+moveAction :: String -> EC.Action
+moveAction exit ingame = case EB.move pl exit ingame of
+        Left err -> printError err ingame
+        Right ingame -> ingame
+    where pl = player ingame
 
 
 
@@ -127,6 +133,11 @@ showStateCmd = actionCmd showStateAction
 showStorageCmd :: ET.Command
 showStorageCmd = actionCmd showStorageAction
 
+moveCmd :: ET.Command
+moveCmd = actionIngameCmd fn
+    where fn cmd ingame = moveAction $ exit cmd
+          exit cmd = arg cmd 1
+
 main = do
     maybeIngame <- preparedIngame
     case maybeIngame of
@@ -138,6 +149,7 @@ main = do
                 ET.addCommand "p" showPlayerCmd $
                 ET.addCommand "s" showStateCmd $
                 ET.addCommand "storage" showStorageCmd $
+                ET.addCommand "m" moveCmd $
                 ET.setIngame ingame $
                 ET.defaultTerminal
      ET.repl term

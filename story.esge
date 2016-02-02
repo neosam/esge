@@ -13,8 +13,16 @@ mana: 0,0
 New room bedroom
 title: Your bedroom
 desc: A very beautiful bedroom
-individual: susan
-exits:
+individual:
+exits: Floor,floor
 items:
+
+New room floor
+title: Your floor
+desc: A wonderful floor
+individual: susan
+exits: Bedroom,bedroom
+items:
+
 
 
