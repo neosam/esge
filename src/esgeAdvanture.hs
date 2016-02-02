@@ -81,11 +81,42 @@ moveRoomAction exitName ingame =
          Left err -> printError err ingame
          Right ingame -> ingame
 
--- Coming next
--- * actions
---   * moveRoom
---   * showRoom
---   *
+showRoomAction :: EC.Action
+showRoomAction ingame = EC.setIngameResponse "output" roomText ingame
+    where roomText = ER.title room ++ "\n" ++
+                     ER.desc room ++ "\n" ++
+                     "Exits: " ++ (unwords $ ER.exitNames room)
+          room = currRoom ingame
+
+showIndAction :: EI.Individual -> EC.Action
+showIndAction ind ingame = EC.setIngameResponse "output" indText ingame
+    where indText = EI.name ind
+
+showStateAction :: EC.Action
+showStateAction ingame = EC.setIngameResponse "output" stateText ingame
+    where stateText = show $ state ingame
+
+
+ingameCmd :: (String -> EC.Ingame -> EC.Ingame) -> ET.Command
+ingameCmd mod cmd term = return $ (ET.modifyIngame modifier term, True)
+    where modifier = mod cmd
+
+actionCmd :: EC.Action -> ET.Command
+actionCmd action = ingameCmd mod
+    where mod _ ingame = EC.scheduleAction action ingame
+
+actionIngameCmd :: (String -> EC.Ingame -> EC.Action) -> ET.Command
+actionIngameCmd fn cmd term = actionCmd (fn cmd $ ET.ingame term) cmd term
+
+showRoomCmd :: ET.Command
+showRoomCmd = actionCmd showRoomAction
+
+showPlayerCmd :: ET.Command
+showPlayerCmd = actionIngameCmd showPlayer
+    where showPlayer _ ingame = showIndAction $ player ingame
+
+showStateCmd :: ET.Command
+showStateCmd = actionCmd showStateAction
 
 main = do
     maybeIngame <- preparedIngame
@@ -94,6 +125,9 @@ main = do
      Just ingame -> do
      let term = ET.addCommand "quit" quitCommand $
                 ET.addCommand "q" quitCommand $
+                ET.addCommand "b" showRoomCmd $
+                ET.addCommand "p" showPlayerCmd $
+                ET.addCommand "s" showStateCmd $
                 ET.defaultTerminal
      ET.repl term
      return ()

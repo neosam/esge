@@ -6,7 +6,8 @@ module Esge.Room (
             getRoom,
 
             addIndividualId,
-            removeIndividualId
+            removeIndividualId,
+            exitNames
         ) where
 
 import qualified Esge.Core as EC
@@ -81,3 +82,6 @@ addIndividualId key room = room { individual = key : individual room }
 removeIndividualId :: String -> Room -> Room
 removeIndividualId key room = room { individual = filter (/= key) $
                                                         individual room }
+
+exitNames :: Room -> [String]
+exitNames room = map fst $ exits room
