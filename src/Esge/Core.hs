@@ -33,6 +33,7 @@ module Esge.Core (
             -- * Functions
             defaultIngame,
             storageInsert,
+            insertStorages,
             storageGet,
             storage,
             allOfType,
@@ -229,3 +230,12 @@ storageToTuple storage@(Storage key _ _) = (key, storage)
 -- | Got all Storages which can be transformed to a type
 allOfType :: Storageable a => Ingame -> [a]
 allOfType ingame = catMaybes $ map fromStorage $ storage ingame
+
+
+-- | Insert a list of 'Storage's
+insertStorages :: Storageable a => [a] -> Ingame -> Ingame
+insertStorages xs ingame = foldr insert ingame xs
+    where insert = storageInsert
+
+
+

@@ -28,10 +28,25 @@ module Esge.Terminal(
             setIngame,
             ingame,
             findCommand,
-            modifyIngame
+            modifyIngame,
+
+            -- * Command helper
+            arg,
+            ingameCmd,
+            actionCmd,
+            actionIngameCmd,
+
+            -- * Commands
+            quitCommand,
+            showRoomCmd,
+            showPlayerCmd,
+            showStateCmd,
+            showStorageCmd,
+            moveCmd
         ) where
 
 import qualified Esge.Core as EC
+import qualified Esge.Base as EB
 import System.IO
 
 -- | User input action.
@@ -119,3 +134,57 @@ modifyIngame :: (EC.Ingame -> EC.Ingame)  -- ^ Ingame modifier function
              -> Terminal                  -- ^ Terminal state
              -> Terminal                  -- ^ Updated terminal state
 modifyIngame fn terminal = terminal { ingame = fn $ ingame terminal }
+
+
+
+-- | Command which quits the game
+quitCommand :: Command
+quitCommand _ term = return (modifyIngame setDone term, False)
+
+
+-- | Get the nth word from String
+arg :: String -> Int -> String
+arg str i = words str !! i
+
+-- | Generate 'Command' to manipulite Ingame
+ingameCmd :: (String -> EC.Ingame -> EC.Ingame) -> Command
+ingameCmd mod cmd term = return $ (modifyIngame modifier term, True)
+    where modifier = mod cmd
+
+
+-- | Command which schedules the 'Action' for next iteration.
+actionCmd :: EC.Action -> Command
+actionCmd action = ingameCmd mod
+    where mod _ ingame = EC.scheduleAction action ingame
+
+-- | More advanced 'Action' scheduling 'Command' generator.
+--
+-- It receives a function, which takes the command and the ingame
+-- but no terminal.
+actionIngameCmd :: (String -> EC.Ingame -> EC.Action) -> Command
+actionIngameCmd fn cmd term = actionCmd (fn cmd $ ingame term) cmd term
+
+
+-- | Show room which contains the player
+showRoomCmd :: Command
+showRoomCmd = actionCmd EB.showRoomAction
+
+-- | Show player
+showPlayerCmd :: Command
+showPlayerCmd = actionIngameCmd showPlayer
+    where showPlayer _ ingame = EB.showIndAction $ EB.player ingame
+
+-- | Display state for debugging
+showStateCmd :: Command
+showStateCmd = actionCmd EB.showStateAction
+
+-- | Show storage for debugging
+showStorageCmd :: Command
+showStorageCmd = actionCmd EB.showStorageAction
+
+-- | Move player to given exit
+moveCmd :: Command
+moveCmd = actionIngameCmd fn
+    where fn cmd ingame = EB.moveRoomAction $ exit cmd
+          exit cmd = arg cmd 1
+

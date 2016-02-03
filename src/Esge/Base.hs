@@ -8,18 +8,47 @@ Maintainer  : neosam@posteo.de
 Basic required functions in order create a game.
 They are higher level and let you for example move Individuals.
 
+Many features are introduced by this module
+
+* Error handling
+* Individual and Room interaction
+* State
+* Player handling
+* Provide basic 'EC.Action's
+
 -}
 
 module Esge.Base (
+        -- * Type definitions
         Error (RoomNotFoundError, ExitNotFoundError),
+        State (stPlayer, stVersion, stName),
 
+        -- * Error functions
+        printError,
+
+        -- * Individual/Room interaction
         individualsInRoomId,
         individualsInRoom,
         roomOfIndividualId,
         roomOfIndividual,
         beam,
-        move
-    ) where
+        move,
+
+        -- * State functions
+        nullState,
+        state,
+
+        -- * Player specific functions
+        player,
+        currRoom,
+
+        -- * Actions
+        moveRoomAction,
+        showRoomAction,
+        showIndAction,
+        showStateAction,
+        showStorageAction
+) where
 
 import qualified Esge.Core as EC
 import qualified Esge.Room as ER
@@ -80,3 +109,92 @@ move ind exitRoom ingame =
     if exitRoom `elem` (map fst $ ER.exits fromRoom) then
         beam ind (maybe "" id $ lookup exitRoom $ ER.exits fromRoom) ingame
     else Left $ ExitNotFoundError exitRoom
+
+
+-- | Important state values
+data State = State {
+    stPlayer :: String,
+    stVersion :: String,
+    stName :: String
+} deriving (Eq, Read, Show)
+
+-- | State to use in case of an error
+nullState :: State
+nullState = State "" "" ""
+
+
+-- | State can be stored in 'EC.Ingame'
+instance EC.Storageable State where
+    toStorage state = EC.Storage "state" "esgeState" [
+            ("player", stPlayer state),
+            ("version", stVersion state),
+            ("name", stName state)
+        ]
+    fromStorage (EC.Storage key t metas) =
+        if t /= "esgeState" then Nothing
+        else do
+            player <- lookup "player" metas
+            version <- lookup "version" metas
+            name <- lookup "name" metas
+            return State {
+                stPlayer = player,
+                stVersion = version,
+                stName = name
+            }
+
+-- | Get state from 'EC.Ingame'
+state :: EC.Ingame -> State
+state ingame = maybe nullState id $ do
+    storage <- EC.storageGet "state" ingame
+    state <- EC.fromStorage storage
+    return state
+
+-- | Get player from 'EC.Ingame'
+player :: EC.Ingame -> EI.Individual
+player ingame =
+    let playerId = stPlayer $ state ingame in
+        EI.getIndividualNull ingame playerId
+
+-- | Get room where player is located
+currRoom :: EC.Ingame -> ER.Room
+currRoom ingame = roomOfIndividual (player ingame) ingame
+
+
+-- | Print 'Error' to 'EC.Ingame' output response
+printError :: Error -> EC.Ingame -> EC.Ingame
+printError err ingame = EC.setIngameResponse "output" (
+    case err of
+        RoomNotFoundError str -> "Room not found: '" ++ str ++ "'"
+        ExitNotFoundError str -> "Exit not found: " ++ str ++ "'"
+    ) ingame
+
+-- | Move player in 'Room' of behind exit.
+moveRoomAction :: String -> EC.Action
+moveRoomAction exitName ingame =
+    case move (player ingame) exitName ingame of
+         Left err -> printError err ingame
+         Right ingame -> ingame
+
+-- | Display room
+showRoomAction :: EC.Action
+showRoomAction ingame = EC.setIngameResponse "output" roomText ingame
+    where roomText = ER.title room ++ "\n" ++
+                     ER.desc room ++ "\n" ++
+                     "Exits: " ++ (unwords $ ER.exitNames room)
+          room = currRoom ingame
+
+-- | Show individual
+showIndAction :: EI.Individual -> EC.Action
+showIndAction ind ingame = EC.setIngameResponse "output" indText ingame
+    where indText = EI.name ind
+
+-- | Show state for debugging
+showStateAction :: EC.Action
+showStateAction ingame = EC.setIngameResponse "output" stateText ingame
+    where stateText = show $ state ingame
+
+-- | Show the whole 'Storage'
+showStorageAction :: EC.Action
+showStorageAction ingame = EC.setIngameResponse "output" stateText ingame
+    where stateText = show $ EC.storage ingame
+
