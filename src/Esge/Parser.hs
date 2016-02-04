@@ -36,11 +36,16 @@ parse rule text = Parsec.parse rule "(source)" text
 
 
 -- | Load from the story file
+loadFile :: FilePath -> IO (Either Parsec.ParseError [EC.Storage])
 loadFile filename = do
     storyFile <- readFile filename
     return (Parsec.parse parseFile filename storyFile)
 
 -- | Load from a String
+loadString :: Parsec.SourceName                         -- ^ Referenced in
+                                                        --   error messages
+            -> String                                   -- ^ String to parse
+            -> Either Parsec.ParseError [EC.Storage]    -- ^ Result
 loadString = Parsec.parse parseFile
 
 
