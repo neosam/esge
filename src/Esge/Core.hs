@@ -55,6 +55,10 @@ type MetaList = [Meta]
 
 -- | Used to hold an element of the game like a person, room, action.
 -- Add custom elements by using the Storageable class
+--
+-- @
+--  Storage key type metas
+-- @
 data Storage = Storage String String MetaList
     deriving (Show, Read, Eq)
 
@@ -141,7 +145,13 @@ class Actionable a where
     toAction :: a -> Action
 
 
--- | State object
+-- | Represents the whole game state.  It contains
+--
+-- * All items like Rooms, Individuals, Trigger and so on as 'Storage'.
+--   This can be extended by other Haskell modules.
+-- * List of 'Action's for the next iteration.
+-- * Response back to the caller (for output and so on).  There can be
+--   unlimited "channels".  Values are always Strings.
 data Ingame = Ingame [Storage] -- All items
                          [Action]  -- Actions on next step
                          MetaList  -- Engine response
