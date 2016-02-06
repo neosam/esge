@@ -1,9 +1,29 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+
 import Test.Hspec
 import qualified Esge.Core as EC
 import qualified Esge.Individual as EI
 import qualified Esge.Room as ER
 import qualified Esge.Parser as EP
 import qualified Esge.Base as EB
+
+
+-- I import qualified so that it's clear which
+-- functions are from the parsec library:
+import qualified Text.Parsec as Parsec
+
+-- I am the error message infix operator, used later:
+--import Text.Parsec ((<?>))
+
+-- Imported so we can play with applicative things later.
+-- not qualified as mostly infix operators we'll be using.
+--import Control.Applicative
+
+-- Get the Identity monad from here:
+--import Control.Monad.Identity (Identity)
+
+
 
 defaultStorage :: EC.Storage
 defaultStorage = EC.Storage "title" "type" []
@@ -17,6 +37,13 @@ outputAction ingame = EC.setIngameResponse "output" "test" ingame
 myIndividual :: EI.Individual
 myIndividual = EI.Individual "ind" "Mr. Blub" "This is mister blub"
                              (100, 100) (200, 200) [("some", "thing")]
+
+foobarParser :: EP.BlockParser
+foobarParser = do
+    _ <- Parsec.string "Foobar"
+    EP.dbleol
+    return $ EC.Storage "foo" "bar" []
+
 
 myRoom :: ER.Room
 myRoom = ER.Room "room" "A room" "This is a room" ["ind"]
@@ -94,14 +121,19 @@ main = hspec $ do
             let dest = [EC.Storage "thingie" "thing" 
                             [("key1", "value1"), ("key2", "value2")],
                         EC.Storage "thingie" "thong" []]
-            EP.loadString "(source)" parseStr `shouldBe` (Right dest)
+            EP.loadString [] "(source)" parseStr `shouldBe` (Right dest)
         it "should parse empty values" $ do
             let parseStr = "New thing thingie\n" ++
                            "key1:\n" ++
                            "key2:a\n\n\n"
             let dest = [EC.Storage "thingie" "thing"
                             [("key1", ""), ("key2", "a")]]
-            EP.loadString "(source)" parseStr `shouldBe` (Right dest)
+            EP.loadString [] "(source)" parseStr `shouldBe` (Right dest)
+        it "should support custom block parsers" $ do
+            let parseStr = "Foobar\n\n"
+            let dest = [EC.Storage "foo" "bar" []]
+            EP.loadString [foobarParser] "(source)" parseStr `shouldBe`
+                                                                (Right dest)
 
     describe "The Base Module" $ do
         context "which can handle rooms and individuals" $ do

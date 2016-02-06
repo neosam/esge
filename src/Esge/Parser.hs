@@ -12,7 +12,15 @@ Loads the story file and returns the 'EC.Storage's.
 -}
 
 
-module Esge.Parser (loadFile, loadString) where
+module Esge.Parser (
+        BlockParser,
+
+        loadFile,
+        loadString,
+
+        eol,
+        dbleol
+) where
 
 
 -- I import qualified so that it's clear which
@@ -34,19 +42,21 @@ import qualified Esge.Core as EC
 -- alias Parsec.parse for more concise usage in my examples:
 parse rule text = Parsec.parse rule "(source)" text
 
+type BlockParser = Parsec.Parsec String () EC.Storage
 
 -- | Load from the story file
-loadFile :: FilePath -> IO (Either Parsec.ParseError [EC.Storage])
-loadFile filename = do
+loadFile :: [BlockParser] -> FilePath
+                        -> IO (Either Parsec.ParseError [EC.Storage])
+loadFile blocks filename = do
     storyFile <- readFile filename
-    return (Parsec.parse parseFile filename storyFile)
+    return $ Parsec.parse (parseFile blocks) filename storyFile
 
 -- | Load from a String
-loadString :: Parsec.SourceName                         -- ^ Referenced in
+loadString :: [BlockParser] -> Parsec.SourceName        -- ^ Referenced in
                                                         --   error messages
             -> String                                   -- ^ String to parse
             -> Either Parsec.ParseError [EC.Storage]    -- ^ Result
-loadString = Parsec.parse parseFile
+loadString blocks = Parsec.parse $ parseFile blocks
 
 
 -- | End of line criteria
@@ -64,8 +74,14 @@ dbleol = do
 
 
 -- | Parsec entry point
-parseFile :: Parsec.Parsec String () [EC.Storage]
-parseFile = Parsec.manyTill storage Parsec.eof
+parseFile :: [BlockParser] -> Parsec.Parsec String () [EC.Storage]
+parseFile blocks = Parsec.manyTill (block blocks) Parsec.eof
+
+block :: [BlockParser]
+        -> Parsec.Parsec String () EC.Storage
+block xs = Parsec.choice blocks <?> "Block object"
+    where xs' = storage : xs
+          blocks = map Parsec.try xs'
 
 -- | Parse ane 'EC.Storage'
 storage :: Parsec.Parsec String () EC.Storage

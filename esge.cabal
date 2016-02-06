@@ -37,7 +37,9 @@ test-suite tests
     main-is: src/HSpecTests.hs
     build-depends:       base,
                          esge,
-                         hspec                >= 1.8
+                         hspec                >= 1.8,
+                         parsec,
+                         mtl
     default-language:    Haskell2010
 
 

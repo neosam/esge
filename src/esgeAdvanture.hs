@@ -7,7 +7,7 @@ import qualified Esge.Room as ER
 
 preparedIngame :: IO (Maybe EC.Ingame)
 preparedIngame = do
-    parseResult <- EP.loadFile "story.esge"
+    parseResult <- EP.loadFile [] "story.esge"
     case parseResult of
         Left err -> do putStr ((show err) ++ "\n")
                        return Nothing
