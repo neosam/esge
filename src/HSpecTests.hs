@@ -7,6 +7,7 @@ import qualified Esge.Individual as EI
 import qualified Esge.Room as ER
 import qualified Esge.Parser as EP
 import qualified Esge.Base as EB
+import qualified Esge.Run as ERun
 
 
 -- I import qualified so that it's clear which
@@ -169,4 +170,34 @@ main = hspec $ do
                 moveStorage `shouldBe` beamStorage
             it "will let a person pick something up" $ do
                 pendingWith "future version"
+
+    describe "The Run Module" $ do
+        context "which provides an individual check" $ do
+            let pCheckGood _ = Right ()
+                pCheckBad _ = Left "Error message"
+                pCheckHasInd ingame = case EC.storageGet "ind" ingame of
+                    Nothing -> Left "ind not found"
+                    Just _ -> Right ()
+                emptyIngame = EC.defaultIngame
+                indIngame = EC.storageInsert myIndividual emptyIngame
+            it "should be no error if the check returns Right ()" $ do
+                ERun.plausabilityCheck [pCheckGood] emptyIngame
+                                                    `shouldBe` Right ()
+            it "should return an errer of the check is bad" $ do
+                ERun.plausabilityCheck [pCheckBad] emptyIngame
+                                                `shouldBe` Left "Error message"
+            it "should return an error since ind is not found" $ do
+                ERun.plausabilityCheck [pCheckHasInd] emptyIngame
+                                                `shouldBe` Left "ind not found"
+            it "should return no error since ind is found now" $ do
+                ERun.plausabilityCheck [pCheckHasInd] indIngame
+                                                `shouldBe` Right ()
+            it "should return an error if just one test fails" $ do
+                ERun.plausabilityCheck [pCheckGood, pCheckHasInd] emptyIngame
+                                                `shouldBe` Left "ind not found"
+                ERun.plausabilityCheck [pCheckHasInd, pCheckGood] emptyIngame
+                                                `shouldBe` Left "ind not found"
+            it "should return no error if all tests pass" $ do
+                ERun.plausabilityCheck [pCheckGood, pCheckHasInd] indIngame
+                                                `shouldBe` Right ()
 

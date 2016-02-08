@@ -21,7 +21,8 @@ library
                         Esge.Room,
                         Esge.Parser,
                         Esge.Base,
-                        Esge.Terminal
+                        Esge.Terminal,
+                        Esge.Run
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.8 && <4.9,
