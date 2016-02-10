@@ -170,6 +170,26 @@ main = hspec $ do
                 moveStorage `shouldBe` beamStorage
             it "will let a person pick something up" $ do
                 pendingWith "future version"
+        context "which provides some acions" $ do
+            let myAction ingame = EC.setIngameResponse "output" "foo" ingame
+                ing = EC.defaultIngame
+                test ingame = case EC.storageGet "ind" ingame of
+                    Nothing -> False
+                    Just _ -> True
+            it "will provide in infinityAction" $ do
+                let ingame = EC.scheduleAction act ing
+                    act = EB.infinityAction myAction
+                let ingame' = EC.step ingame
+                EC.getIngameResponse "output" ingame' `shouldBe` "foo"
+                let ingame'' = EC.step ingame'
+                EC.getIngameResponse "output" ingame'' `shouldBe` "foo"
+            it "will provide an conditional infinity action" $ do
+                let ingame = EC.scheduleAction act 
+                                $ EC.storageInsert myIndividual ing
+                    act = EB.condInfinityAction test myAction
+                let ingame' = EC.step ingame
+                EC.getIngameResponse "output" ingame' `shouldBe` "foo"
+
 
     describe "The Run Module" $ do
         context "which provides an individual check" $ do

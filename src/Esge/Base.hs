@@ -43,6 +43,12 @@ module Esge.Base (
         currRoom,
 
         -- * Actions
+        -- ** Long term actions
+        infinityAction,
+        condInfinityAction,
+        condDropableAction,
+        condSingleAction,
+        -- ** Game state actions
         moveRoomAction,
         showRoomAction,
         showIndAction,
@@ -198,3 +204,33 @@ showStorageAction :: EC.Action
 showStorageAction ingame = EC.setIngameResponse "output" stateText ingame
     where stateText = show $ EC.storage ingame
 
+
+
+-- | Run given action and re register
+infinityAction :: EC.Action -> EC.Action
+infinityAction act ingame = EC.scheduleAction self ingame'
+    where ingame' = act ingame
+          self = infinityAction act
+
+-- | Run given action only if condition is true
+condInfinityAction :: (EC.Ingame -> Bool) -> EC.Action -> EC.Action
+condInfinityAction condFn act ingame = EC.scheduleAction self ingame'
+    where ingame' = if condFn ingame then act ingame
+                                     else ingame
+          self = condInfinityAction condFn act
+
+-- | Run given action as long as condition is true, then remove it
+condDropableAction :: (EC.Ingame -> Bool) -> EC.Action -> EC.Action
+condDropableAction condFn act ingame = if condFn ingame 
+                                        then EC.scheduleAction self ingame'
+                                        else ingame
+    where ingame' = act ingame
+          self = condDropableAction condFn act
+
+-- | Do nothing until the condition becomes true, then run 'Action' once
+--   and remove.
+condSingleAction :: (EC.Ingame -> Bool) -> EC.Action -> EC.Action
+condSingleAction condFn act ingame = if condFn ingame
+                                      then act ingame
+                                      else EC.scheduleAction self ingame
+    where self = condSingleAction condFn act
