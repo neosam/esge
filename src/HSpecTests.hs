@@ -219,7 +219,21 @@ main = hspec $ do
                 let ingame'6 = EC.storageInsert myIndividual ingame'5
                 let ingame'7 = EC.step ingame'6
                 EC.getIngameResponse "output" ingame'7 `shouldBe` ""
-            
+            it "will provide a conditional single action" $ do
+                let ingame = EC.scheduleAction act ing
+                    act = EB.condSingleAction test myAction
+                let ingame' = EC.step ingame
+                EC.getIngameResponse "output" ingame' `shouldBe` ""
+                let ingame'' = EC.step ingame
+                EC.getIngameResponse "output" ingame'' `shouldBe` ""
+                let ingame'3 = EC.storageInsert myIndividual ingame''
+                let ingame'4 = EC.step ingame'3
+                EC.getIngameResponse "output" ingame'4 `shouldBe` "foo"
+                let ingame'5 = EC.step ingame'4
+                EC.getIngameResponse "output" ingame'5 `shouldBe` ""
+                let ingame'6 = EC.storageRemove "ind" ingame'5
+                let ingame'7 = EC.step ingame'6
+                EC.getIngameResponse "output" ingame'7 `shouldBe` ""
 
 
     describe "The Run Module" $ do
