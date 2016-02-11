@@ -187,7 +187,7 @@ main = hspec $ do
                 EC.getIngameResponse "output" ingame' `shouldBe` "foo"
                 let ingame'' = EC.step ingame'
                 EC.getIngameResponse "output" ingame'' `shouldBe` "foo"
-            it "will provide an conditional infinity action" $ do
+            it "will provide a conditional infinity action" $ do
                 let ingame = EC.scheduleAction act 
                                 $ EC.storageInsert myIndividual ing
                     act = EB.condInfinityAction test myAction
@@ -203,6 +203,23 @@ main = hspec $ do
                 let ingame'6 = EC.storageInsert myIndividual ingame'5
                 let ingame'7 = EC.step ingame'6
                 EC.getIngameResponse "output" ingame'7 `shouldBe` "foo"
+            it "will provide a conditional dropable action" $ do
+                let ingame = EC.scheduleAction act 
+                                $ EC.storageInsert myIndividual ing
+                    act = EB.condDropableAction test myAction
+                let ingame' = EC.step ingame
+                EC.getIngameResponse "output" ingame' `shouldBe` "foo"
+                let ingame'' = EC.step ingame
+                EC.getIngameResponse "output" ingame'' `shouldBe` "foo"
+                let ingame'3 = EC.storageRemove "ind" ingame''
+                let ingame'4 = EC.step ingame'3
+                EC.getIngameResponse "output" ingame'4 `shouldBe` ""
+                let ingame'5 = EC.step ingame'4
+                EC.getIngameResponse "output" ingame'5 `shouldBe` ""
+                let ingame'6 = EC.storageInsert myIndividual ingame'5
+                let ingame'7 = EC.step ingame'6
+                EC.getIngameResponse "output" ingame'7 `shouldBe` ""
+            
 
 
     describe "The Run Module" $ do
