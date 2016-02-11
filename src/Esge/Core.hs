@@ -33,6 +33,7 @@ module Esge.Core (
             -- * Functions
             defaultIngame,
             storageInsert,
+            storageRemove,
             insertStorages,
             storageGet,
             storage,
@@ -247,5 +248,11 @@ insertStorages :: Storageable a => [a] -> Ingame -> Ingame
 insertStorages xs ingame = foldr insert ingame xs
     where insert = storageInsert
 
-
+-- | Remove element from storage
+storageRemove :: String         -- ^ Storage key to remove
+              -> Ingame         -- ^ State to edit
+              -> Ingame         -- ^ Modified state
+storageRemove key ingame = setStorage storage' ingame
+    where storage' = filter removeFn $ storage ingame
+          removeFn (Storage storageKey _ _) = storageKey /= key
 

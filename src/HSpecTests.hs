@@ -66,6 +66,10 @@ main = hspec $ do
                 storage2 `shouldBe`  (Just defaultStorage)
             it "should return the last inserted value" $ do
                 EC.storageGet "title" inserted2 `shouldBe` (Just secondStorage)
+            it "should be possible to delete a value" $ do
+                let removed = EC.storageRemove "title" inserted
+                    hopefullyNothing = EC.storageGet "title" removed
+                hopefullyNothing `shouldBe` Nothing
         context "which provides a action and response functionality" $ do
             let ingame = EC.defaultIngame
             let inserted = EC.scheduleAction outputAction ingame
