@@ -42,6 +42,7 @@ import qualified Esge.Core as EC
 -- alias Parsec.parse for more concise usage in my examples:
 parse rule text = Parsec.parse rule "(source)" text
 
+-- | Parse an storage element
 type BlockParser = Parsec.Parsec String () EC.Storage
 
 -- | Load from the story file
