@@ -48,6 +48,7 @@ module Esge.Base (
         condInfinityAction,
         condDropableAction,
         condSingleAction,
+        delayedAction,
         -- ** Game state actions
         moveRoomAction,
         showRoomAction,
@@ -234,3 +235,9 @@ condSingleAction condFn act ingame = if condFn ingame
                                       then act ingame
                                       else EC.scheduleAction self ingame
     where self = condSingleAction condFn act
+
+-- | Wait n times and then run the action
+delayedAction :: Int -> EC.Action -> EC.Action
+delayedAction n act ingame = if n <= 0 then act ingame
+                                       else EC.scheduleAction self ingame
+    where self = delayedAction (n - 1) act

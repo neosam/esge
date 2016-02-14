@@ -36,8 +36,8 @@ type PCheck = EC.Ingame -> Either String ()
 
 -- | Hold function depending on the game type
 data ActionFactory = ActionFactory {
-    delayedAction :: EC.Action,
-    shortDelayedAction :: EC.Action
+    delayedAction :: (Int, Float) -> EC.Action -> EC.Action,
+    shortDelayedAction :: Float -> EC.Action -> EC.Action
 }
 
 -- | Hold initializer of the ingame
@@ -119,6 +119,9 @@ newtype ReplMod = ReplMod (ET.Terminal -> ET.Terminal)
 -- | Terminal initializer
 data ReplInit = ReplInit [ReplMod] IngameInit
 
+-- | Repl init generator
+type ReplInitGen = ActionFactory -> IO ReplInit
+
 -- | Create initializer function
 replLoader :: ([ReplMod], IngameInit) -> ReplInit
 replLoader (mods, ingameLoader) = ReplInit mods ingameLoader
@@ -151,3 +154,16 @@ modsFromReplInit (ReplInit mods _) = mods
 -- | Apply all 'ReplMods' on an 'ET.Terminal'
 applyReplMod :: ReplMod -> ET.Terminal -> ET.Terminal
 applyReplMod (ReplMod mod) terminal = mod terminal
+
+replDelayedAction :: (Int, Float) -> EC.Action -> EC.Action
+replDelayedAction (ticks, _) act = EB.delayedAction ticks act
+
+replShortDelayAction :: Float -> EC.Action -> EC.Action
+replShortDelayAction _ act = act
+
+replActionFactory = ActionFactory {
+    delayedAction = replDelayedAction,
+    shortDelayedAction = replShortDelayAction
+}
+
+
