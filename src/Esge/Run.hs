@@ -127,9 +127,10 @@ replLoader :: ([ReplMod], IngameInit) -> ReplInit
 replLoader (mods, ingameLoader) = ReplInit mods ingameLoader
 
 -- | Run the shit
-replRun :: FilePath -> [ReplInit] -> IO ET.Terminal
-replRun filename loaders =
-    let ingameInits = map ingameFromReplInit loaders in do
+replRun :: FilePath -> [ReplInitGen] -> IO ET.Terminal
+replRun filename gens = do
+    loaders <- mapM ($ replActionFactory) gens
+    let ingameInits = map ingameFromReplInit loaders
     possibleIngame <- ingameRun filename ingameInits
     case possibleIngame of
         Right ingame -> do
