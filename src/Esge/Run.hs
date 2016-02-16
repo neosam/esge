@@ -145,7 +145,7 @@ replRun filename gens = do
     possibleIngame <- ingameRun filename ingameInits
     case possibleIngame of
         Left err -> do
-            putStr err
+            putStr (err ++ "\n")
             return ET.defaultTerminal
         Right ingame -> do
             let mergedReplInits = mergedModsFromReplInit loaders
