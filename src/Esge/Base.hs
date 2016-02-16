@@ -29,6 +29,7 @@ module Esge.Base (
         -- * Individual/Room interaction
         individualsInRoomId,
         individualsInRoom,
+        roomsOfIndividualId,
         roomOfIndividualId,
         roomOfIndividual,
         beam,
@@ -86,10 +87,21 @@ individualsInRoom room ingame = individualsInRoomId (ER.key room) ingame
 --   Returns nullRoom if not found
 roomOfIndividualId :: String -> EC.Ingame -> ER.Room
 roomOfIndividualId key ingame =
-    let rooms = ER.allRooms ingame :: [ER.Room]
-        a = filter (\x -> elem key $ ER.individual x) rooms in
-    if null a then ER.nullRoom
-    else head a
+    let rooms = roomsOfIndividualId key ingame in
+    if null rooms then ER.nullRoom
+                  else head rooms
+
+-- | Return all rooms, where the individual is located.
+-- 
+-- This should only be one or nothing otherwise there is most likely an issue
+-- in the story setup.  Normally, 'roomOfIndividualId' or 'roomOfIndividual'
+-- should be used.  The purpose of this function is as helper for the
+-- plausability check.
+roomsOfIndividualId :: String -> EC.Ingame -> [ER.Room]
+roomsOfIndividualId key ingame =
+    let rooms = ER.allRooms ingame :: [ER.Room] in
+    filter (\x -> elem key $ ER.individual x) rooms
+
 
 -- | Room which contains the given Individual
 roomOfIndividual :: EI.Individual -> EC.Ingame -> ER.Room

@@ -18,9 +18,14 @@ module Esge.Run (
 
         -- * Repl loaders
         ReplInit,
+        ReplInitGen,
         ReplMod (ReplMod),
         replLoader,
         replRun,
+
+        -- ** Initializers
+        defaults,
+        defaultRepl,
 
         -- * Plausability checks
         PCheck,
@@ -29,10 +34,16 @@ import qualified Esge.Core as EC
 import qualified Esge.Base as EB
 import qualified Esge.Parser as EP
 import qualified Esge.Terminal as ET
+import qualified Esge.Individual as EI
+import qualified Esge.Room as ER
 
 -- | Plausability check definition.  Left and an error message in used
 --   in case of an error and Right on success.
 type PCheck = EC.Ingame -> Either String ()
+
+-- | Passed check
+pCheckPassed :: Either String ()
+pCheckPassed = Right ()
 
 -- | Hold function depending on the game type
 data ActionFactory = ActionFactory {
@@ -50,7 +61,7 @@ data IngameInit = IngameInit [PCheck] [EP.BlockParser] [IngameMod]
 plausabilityCheck :: [PCheck]           -- ^ List of checks
                     -> EC.Ingame        -- ^ Ingame state to chock
                     -> Either String () -- ^ Error message or success
-plausabilityCheck xs ingame = foldr (>>) (Right ()) xs'
+plausabilityCheck xs ingame = foldr (>>) pCheckPassed xs'
     where xs' = map ($ ingame) xs
 
 -- | Ingame modifier for the loader
@@ -93,12 +104,12 @@ ingameRun :: FilePath           -- ^ Path to story file
 ingameRun filename inits  = do
     let mergedInits = mergeInits inits
         IngameInit pChecks parsers mods = mergedInits
-    storages <- loadFile2 parsers filename
-    let checkResults = plausabilityCheck pChecks ingame
-        ingame = applyIngameMods EC.defaultIngame mods
+    storageEither <- loadFile2 parsers filename
     return $ do
-        storages
-        checkResults
+        storages <- storageEither
+        let ingame = applyIngameMods (EC.insertStorages storages
+                                                        EC.defaultIngame) mods
+        checkResults <- plausabilityCheck pChecks ingame
         return ingame
 
 -- | Merge a list of 'IngameInit' into one 'IngameInit'
@@ -133,6 +144,9 @@ replRun filename gens = do
     let ingameInits = map ingameFromReplInit loaders
     possibleIngame <- ingameRun filename ingameInits
     case possibleIngame of
+        Left err -> do
+            putStr err
+            return ET.defaultTerminal
         Right ingame -> do
             let mergedReplInits = mergedModsFromReplInit loaders
                 terminalIngame = ET.setIngame ingame ET.defaultTerminal
@@ -168,3 +182,69 @@ replActionFactory = ActionFactory {
 }
 
 
+--- Plausapility checks
+-- | Check for every individual if it is only in placed in one room
+checkUniqueIndividualInRoom :: PCheck
+checkUniqueIndividualInRoom ingame =
+    let individuals = EI.allIndividuals ingame
+        results = map (checkIndividualUniquness ingame) individuals
+    in foldr (>>) pCheckPassed results
+
+checkIndividualUniquness :: EC.Ingame -> EI.Individual -> Either String ()
+checkIndividualUniquness ingame ind =
+    let indKey = EI.key ind
+        rooms = EB.roomsOfIndividualId indKey ingame
+    in if length rooms > 1 
+            then Left ("Individual is assigned to multiple rooms: " ++ indKey)
+            else pCheckPassed
+
+
+-- | Check if all exits in the rooms really exist
+checkValidExits :: PCheck
+checkValidExits ingame =
+    let rooms = ER.allRooms ingame
+        exits = concat $ map ER.exits rooms
+        results = map (checkValidExit ingame) exits
+    in foldr (>>) pCheckPassed results
+
+checkValidExit :: EC.Ingame -> (String, String) -> Either String ()
+checkValidExit ingame (exitName, roomId) =
+    case ER.getRoomMaybe ingame roomId of
+        Nothing -> Left ("Room id " ++ roomId ++ " of exit " ++ exitName
+                        ++ " not found")
+        Just _ -> pCheckPassed
+
+-- | Check if player is set up correctly
+checkPlayerSetup :: PCheck
+checkPlayerSetup ingame = if EB.player ingame == EI.nullIndividual
+                                then Left "Player setup incorrect"
+                                else pCheckPassed
+
+
+-- | Default ingame setup
+defaults :: ActionFactory -> IngameInit
+defaults fac = ingameLoader (defaultPChecks,
+                           defaultParsers,
+                           defaultMods)
+
+defaultPChecks = [checkUniqueIndividualInRoom,
+                  checkValidExits,
+                  checkPlayerSetup]
+defaultParsers = []
+defaultMods = []
+
+-- | Default repl setup
+defaultRepl :: ReplInitGen
+defaultRepl fac = do return $ replLoader (defaultReplMods, defaults fac)
+
+defaultReplMods = [defaultCommands]
+
+defaultCommands :: ReplMod
+defaultCommands = ReplMod fn
+    where fn term = ET.addCommand "quit" ET.quitCommand $
+                ET.addCommand "q" ET.quitCommand $
+                ET.addCommand "b" ET.showRoomCmd $
+                ET.addCommand "p" ET.showPlayerCmd $
+                ET.addCommand "s" ET.showStateCmd $
+                ET.addCommand "storage" ET.showStorageCmd $
+                ET.addCommand "m" ET.moveCmd term

@@ -4,6 +4,7 @@ import qualified Esge.Terminal as ET
 import qualified Esge.Parser as EP
 import qualified Esge.Individual as EI
 import qualified Esge.Room as ER
+import qualified Esge.Run as ERun
 
 preparedIngame :: IO (Maybe EC.Ingame)
 preparedIngame = do
@@ -15,18 +16,7 @@ preparedIngame = do
                 return $ Just $ EC.insertStorages storage EC.defaultIngame
 
 main = do
-    maybeIngame <- preparedIngame
-    case maybeIngame of
-     Nothing -> return ()
-     Just ingame -> do
-     let term = ET.addCommand "quit" ET.quitCommand $
-                ET.addCommand "q" ET.quitCommand $
-                ET.addCommand "b" ET.showRoomCmd $
-                ET.addCommand "p" ET.showPlayerCmd $
-                ET.addCommand "s" ET.showStateCmd $
-                ET.addCommand "storage" ET.showStorageCmd $
-                ET.addCommand "m" ET.moveCmd $
-                ET.setIngame ingame $
-                ET.defaultTerminal
-     ET.repl term
-     return ()
+    ERun.replRun "story.esge" [
+            ERun.defaultRepl
+        ]
+    return ()

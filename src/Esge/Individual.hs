@@ -11,6 +11,7 @@ Add Individual type and functions to the game.
 
 module Esge.Individual (
             Individual(Individual, key, name, desc, health, mana, items),
+            allIndividuals,
             getIndividual,
             getIndividualNull,
             nullIndividual
@@ -94,3 +95,7 @@ getIndividualNull :: EC.Ingame      -- ^ Ingame to search
                     -> Individual   -- ^ Individual if found or nullIndividual
 getIndividualNull ingame key =
     maybe nullIndividual id $ getIndividual ingame key
+
+-- | Return all individuals
+allIndividuals :: EC.Ingame -> [Individual]
+allIndividuals = EC.allOfType
