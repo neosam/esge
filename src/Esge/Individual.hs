@@ -1,3 +1,4 @@
+{-# OPTIONS -Wall #-}
 {-|
 Module      : Esge.Individual
 Description : Add individuals to game
@@ -64,37 +65,37 @@ instance EC.Storageable Individual where
             ("mana", mergeIntPair "," $ mana ind),
             ("items", unwords $ map (mergeStringPair ",") $ items ind)
         ]
-    fromStorage (EC.Storage key t metas) =
+    fromStorage (EC.Storage stKey t metas) =
         if t /= "individual" then Nothing
         else do
-            name <- lookup "name" metas
-            desc <- lookup "desc" metas
-            health <- lookup "health" metas
-            mana <- lookup "mana" metas
-            items <- lookup "items" metas
+            stName <- lookup "name" metas
+            stDesc <- lookup "desc" metas
+            stHealth <- lookup "health" metas
+            stMana <- lookup "mana" metas
+            stItems <- lookup "items" metas
             return Individual {
-                key = key,
-                name = name,
-                desc = desc,
-                health = strToIntPair health,
-                mana = strToIntPair mana,
-                items = map strToStrPair $ words items
+                key = stKey,
+                name = stName,
+                desc = stDesc,
+                health = strToIntPair stHealth,
+                mana = strToIntPair stMana,
+                items = map strToStrPair $ words stItems
             }
 
 -- | Lookup Individual in 'EC.Ingame'
 getIndividual :: EC.Ingame          -- ^ Ingame to search
              ->  String             -- ^ Individual key to search
              ->  Maybe Individual   -- ^ Individual if found or Nothing
-getIndividual ingame key = do
-    storage <- EC.storageGet key ingame
+getIndividual ingame k = do
+    storage <- EC.storageGet k ingame
     EC.fromStorage storage
 
 -- | Lookup Individual in 'EC.Ingame'
 getIndividualNull :: EC.Ingame      -- ^ Ingame to search
                     -> String       -- ^ Individual key to search
                     -> Individual   -- ^ Individual if found or nullIndividual
-getIndividualNull ingame key =
-    maybe nullIndividual id $ getIndividual ingame key
+getIndividualNull ingame k =
+    maybe nullIndividual id $ getIndividual ingame k
 
 -- | Return all individuals
 allIndividuals :: EC.Ingame -> [Individual]

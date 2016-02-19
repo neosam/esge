@@ -1,3 +1,4 @@
+{-# OPTIONS -Wall #-}
 {-|
 Module      : Esge.Run
 Description : Esge engine initialization module
@@ -12,7 +13,7 @@ Maintainer  : neosam@posteo.de
 module Esge.Run (
         -- * Ingame loaders
         IngameInit,
-        IngameMod (IngameMod),
+        IngameMod,
         ingameLoader,
         ingameRun,
 
@@ -47,8 +48,8 @@ pCheckPassed = Right ()
 
 -- | Hold function depending on the game type
 data ActionFactory = ActionFactory {
-    delayedAction :: (Int, Float) -> EC.Action -> EC.Action,
-    shortDelayedAction :: Float -> EC.Action -> EC.Action
+    delayedAction :: (Int, Float) -> EC.Action () -> EC.Action (),
+    shortDelayedAction :: Float -> EC.Action () -> EC.Action ()
 }
 
 -- | Hold initializer of the ingame
@@ -65,7 +66,7 @@ plausabilityCheck xs ingame = foldr (>>) pCheckPassed xs'
     where xs' = map ($ ingame) xs
 
 -- | Ingame modifier for the loader
-newtype IngameMod = IngameMod (EC.Ingame -> EC.Ingame)
+type IngameMod = EC.Action ()
 
 -- | Generates a modifier function for the ingame initializers
 -- and will add the given attributes to a 'IngameLoader'
@@ -86,14 +87,6 @@ loadFile2 parsers filename = do
 defaultLoader :: IngameInit
 defaultLoader = IngameInit [] [] []
 
--- | Get function out of  mod
-unpackIngameMod :: IngameMod -> (EC.Ingame -> EC.Ingame)
-unpackIngameMod (IngameMod fn) = fn
-
--- | Run 'IngameMods' on 'Ingame'
-applyIngameMods :: EC.Ingame -> [IngameMod] -> EC.Ingame
-applyIngameMods ingame xs = foldr ($) ingame $ map unpackIngameMod xs
-
 -- | Initializes the ingame state
 ingameRun :: FilePath           -- ^ Path to story file
             -> [IngameInit]     -- ^ Initialization for custom parsers,
@@ -107,10 +100,10 @@ ingameRun filename inits  = do
     storageEither <- loadFile2 parsers filename
     return $ do
         storages <- storageEither
-        let ingame = applyIngameMods (EC.insertStorages storages
-                                                        EC.defaultIngame) mods
-        checkResults <- plausabilityCheck pChecks ingame
-        return ingame
+        let ing = EC.defaultIngameWithStorage storages
+            ing' = foldr EC.scheduleAction ing mods
+        plausabilityCheck pChecks ing'
+        return $ EC.step ing'
 
 -- | Merge a list of 'IngameInit' into one 'IngameInit'
 mergeInits :: [IngameInit] -> IngameInit
@@ -135,7 +128,7 @@ type ReplInitGen = ActionFactory -> IO ReplInit
 
 -- | Create initializer function
 replLoader :: ([ReplMod], IngameInit) -> ReplInit
-replLoader (mods, ingameLoader) = ReplInit mods ingameLoader
+replLoader (mods, ingameInit) = ReplInit mods ingameInit
 
 -- | Run the shit
 replRun :: FilePath -> [ReplInitGen] -> IO ET.Terminal
@@ -155,7 +148,7 @@ replRun filename gens = do
 
 -- | Get 'IngameInit's from 'ReplInit'
 ingameFromReplInit :: ReplInit -> IngameInit
-ingameFromReplInit (ReplInit _ ingameLoader) = ingameLoader
+ingameFromReplInit (ReplInit _ ingameInit) = ingameInit
 
 -- | Merge all 'ReplMod's from a list of 'ReplInit' into one List
 mergedModsFromReplInit :: [ReplInit] -> [ReplMod]
@@ -168,14 +161,15 @@ modsFromReplInit (ReplInit mods _) = mods
 
 -- | Apply all 'ReplMods' on an 'ET.Terminal'
 applyReplMod :: ReplMod -> ET.Terminal -> ET.Terminal
-applyReplMod (ReplMod mod) terminal = mod terminal
+applyReplMod (ReplMod modf) terminal = modf terminal
 
-replDelayedAction :: (Int, Float) -> EC.Action -> EC.Action
+replDelayedAction :: (Int, Float) -> EC.Action () -> EC.Action ()
 replDelayedAction (ticks, _) act = EB.delayedAction ticks act
 
-replShortDelayAction :: Float -> EC.Action -> EC.Action
+replShortDelayAction :: Float -> EC.Action () -> EC.Action ()
 replShortDelayAction _ act = act
 
+replActionFactory :: ActionFactory
 replActionFactory = ActionFactory {
     delayedAction = replDelayedAction,
     shortDelayedAction = replShortDelayAction
@@ -223,20 +217,26 @@ checkPlayerSetup ingame = if EB.player ingame == EI.nullIndividual
 
 -- | Default ingame setup
 defaults :: ActionFactory -> IngameInit
-defaults fac = ingameLoader (defaultPChecks,
+defaults _ = ingameLoader (defaultPChecks,
                            defaultParsers,
                            defaultMods)
 
+defaultPChecks :: [PCheck]
 defaultPChecks = [checkUniqueIndividualInRoom,
                   checkValidExits,
                   checkPlayerSetup]
+
+defaultParsers :: [EP.BlockParser]
 defaultParsers = []
+
+defaultMods :: [IngameMod]
 defaultMods = []
 
 -- | Default repl setup
 defaultRepl :: ReplInitGen
 defaultRepl fac = do return $ replLoader (defaultReplMods, defaults fac)
 
+defaultReplMods :: [ReplMod]
 defaultReplMods = [defaultCommands]
 
 defaultCommands :: ReplMod

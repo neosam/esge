@@ -1,3 +1,6 @@
+{-# OPTIONS -Wall #-}
+{-# LANGUAGE BangPatterns #-}
+
 {-|
 Module      : Esge.Core
 Description : Most lowlevel edge module.
@@ -32,22 +35,38 @@ module Esge.Core (
 
             -- * Functions
             defaultIngame,
-            storageInsert,
-            storageRemove,
-            insertStorages,
+            defaultIngameWithStorage,
             storageGet,
             storage,
             allOfType,
             scheduleAction,
-            setIngameResponse,
             getIngameResponse,
-            step
+            step,
 
+            -- * Action
+            -- ** Action helpers
+            action,
+            getIngame,
+            setIngame,
+            replaceIngame,
 
+            -- ** Ingame reader
+            storageGetA,
+            storageA,
+            allOfTypeA,
+            scheduleActionA,
+            getIngameResponseA,
+
+            -- ** Ingame manipulators
+            storageInsertA,
+            storageRemoveA,
+            insertStoragesA,
+            setIngameResponseA
         ) where
 
 import Text.Read (readMaybe)
 import Data.Maybe (catMaybes)
+import Control.Monad (liftM, ap)
 
 -- | Key value pair using strings
 type Meta = (String, String)
@@ -113,8 +132,8 @@ instance Storageable StoreFloat where
 -- | Make a Stogage able to convert into itself.
 -- | Then a Starge can also be used for Storageable functions
 instance Storageable Storage where
-    toStorage storage = storage
-    fromStorage storage = Just storage
+    toStorage sto = sto
+    fromStorage sto = Just sto
 
 
 -- | Intended to help to make String storageable
@@ -128,7 +147,7 @@ stringFromStorage typeStr1 (Storage key typeStr2 metas) =
 -- | Intended to help to make all types storageable which implement
 -- the Read class to make primitives like Int and Bool Storageable
 primitiveFromStorage :: Read a => String -> Storage -> Maybe (String, a)
-primitiveFromStorage typeStr storage = case stringFromStorage typeStr storage of
+primitiveFromStorage typeStr sto = case stringFromStorage typeStr sto of
     Nothing -> Nothing
     Just (StoreString (key, str)) -> case readMaybe str of
         Just a -> Just (key, a)
@@ -137,13 +156,59 @@ primitiveFromStorage typeStr storage = case stringFromStorage typeStr storage of
 
 -- | In ingame modifying function.
 --   Can be added as Action in ingame to modify the game in an iteration
-type Action = Ingame -> Ingame
+newtype Action a = Action (Ingame -> (a, Ingame))
+
+-- | Turn the internal used 'Action' function to an 'Action'
+action :: (Ingame -> (a, Ingame)) -> Action a
+action fn = Action fn
+
+-- | Get the current ingame state
+getIngame :: Action Ingame
+getIngame = action $ \ingame -> (ingame, ingame)
+
+-- | Set new 'Ingame' state
+setIngame :: Ingame -> Action ()
+setIngame ingame = action $ \_ ->
+    ((), ingame)
+
+runAction :: Action a -> Ingame -> Ingame
+runAction act ingame =
+    let Action fn = act
+        (_, ingame') = fn ingame
+    in ingame'
+
+-- | Transform in 'Ingame' to 'Ingame' function to an Action ()
+replaceIngame :: (Ingame -> Ingame) -> Action ()
+replaceIngame fn = do
+    ingame <- getIngame
+    setIngame $ fn ingame
+
+applyActions :: Action a -> (a -> Action b) -> Action b
+applyActions (Action act) fn = Action $ \ ingame ->
+    let (x, ingame') = act ingame
+        Action act2 = fn x
+    in act2 ingame'
+
+returnAction :: a -> Action a
+returnAction x = Action $ \ ingame -> (x, ingame)
+
+instance Monad Action where
+    (>>=) = applyActions
+    return = returnAction
+
+instance Functor Action where
+    fmap = liftM
+
+instance Applicative Action where
+    pure = return
+    (<*>) = ap
+
 
 -- | Typeclass to transform something into an action.
 --   Could be a special storage for example which is used as trigger
 --   in the game.
 class Actionable a where
-    toAction :: a -> Action
+    toAction :: a -> Action ()
 
 
 -- | Represents the whole game state.  It contains
@@ -154,23 +219,35 @@ class Actionable a where
 -- * Response back to the caller (for output and so on).  There can be
 --   unlimited "channels".  Values are always Strings.
 data Ingame = Ingame [Storage] -- All items
-                         [Action]  -- Actions on next step
+                         [Action ()]  -- Actions on next step
                          MetaList  -- Engine response
 
 -- | Empfy state, used to initialize
 defaultIngame :: Ingame
 defaultIngame = Ingame [] [] []
 
+-- | Return default ingame with the given 'Storage's.
+--
+-- This is mainly used to initialize the 'Ingame' state.
+defaultIngameWithStorage :: [Storage] -> Ingame
+defaultIngameWithStorage sto = Ingame sto [] []
+
 -- | Replace Storages in Ingame
 setStorage :: [Storage] -> Ingame -> Ingame
-setStorage storage (Ingame _ a b) = Ingame storage a b
+setStorage sto (Ingame _ a b) = Ingame sto a b
 
 -- | Get all Storages from Ingame
 storage :: Ingame -> [Storage]
-storage (Ingame storage _ _) = storage
+storage (Ingame sto _ _) = sto
+
+-- | Get all 'Storage's
+storageA :: Action [Storage]
+storageA = do
+    ingame <- getIngame
+    return $ storage ingame
 
 -- | Set all Actions in Ingame
-setActions :: [Action] -> Ingame -> Ingame
+setActions :: [Action ()] -> Ingame -> Ingame
 setActions xs (Ingame a _ b) = Ingame a xs b
 
 -- | Set responese in Ingame
@@ -179,11 +256,16 @@ setResponse xs (Ingame a b _) = Ingame a b xs
 
 
 -- | Set a single ingame response
-setIngameResponse :: String  -- ^ Response channel
-                  -> String  -- ^ Response text
-                  -> Ingame  -- ^ Ingame before
-                  -> Ingame  -- ^ Modified Ingame
-setIngameResponse key val ingame@(Ingame _ _ xs) =
+setIngameResponseA :: String     -- ^ Response channel
+                   -> String     -- ^ Response text
+                   -> Action ()  -- ^ Modification action
+setIngameResponseA key val = replaceIngame $ setIngameResponse_ key val
+
+setIngameResponse_ :: String  -- ^ Response channel
+                   -> String  -- ^ Response text
+                   -> Ingame  -- ^ Ingame before
+                   -> Ingame  -- ^ Modified Ingame
+setIngameResponse_ key val ingame@(Ingame _ _ xs) =
     setResponse ((key, val) : xs) ingame
 
 -- | Get a single ingame response
@@ -192,40 +274,57 @@ getIngameResponse :: String  -- ^ Response channel
                   -> String  -- ^ Response value.  "" if not found.
 getIngameResponse key (Ingame _ _ xs) = maybe "" id $ lookup key xs
 
+-- | Get a single ingame response
+getIngameResponseA :: String             -- ^ Response channel
+                   -> Action String      -- ^ String result
+getIngameResponseA key = do
+    ingame <- getIngame
+    return $ getIngameResponse key ingame
+
+
 -- | Register Action for next iteration
-scheduleAction :: Action -> Ingame -> Ingame
+scheduleAction :: Action () -> Ingame -> Ingame
 scheduleAction x ingame@(Ingame _ xs _) = setActions (x : xs) ingame
 
--- | Remove all Responese
-pruneResponse :: Ingame -> Ingame
-pruneResponse = setResponse []
+-- | Register 'Action' for next iteration
+scheduleActionA :: Action () -> Action ()
+scheduleActionA x = replaceIngame $ scheduleAction x
 
 -- | Do one iterations and run all Actions
 step :: Ingame -> Ingame
-step (Ingame storage actions metas) =
+step (Ingame sto actions _) =
     foldr run ingame actions
-    where ingame = Ingame storage [] []
-          run action ingame = action ingame
+    where ingame = Ingame sto [] []
+          run act ingame' = runAction act ingame'
 
 -- | Get id from storage
 storageId :: Storage -> String
-storageId (Storage id _ _) = id
+storageId (Storage sid _ _) = sid
 
 -- | Add a value to the storage list
 insertInMetaList :: String -> Storage -> [Storage] -> [Storage]
-insertInMetaList key x xs = x : xs
+insertInMetaList _ x xs = x : xs
 
 
--- | Insert a Storageable item to the Ingame Storage
-storageInsert :: Storageable a => a -> Ingame -> Ingame
-storageInsert a ingame@(Ingame storage _ _) = setStorage storage' ingame
-    where storage' = insertInMetaList key storageItem storage
+storageInsert_ :: Storageable a => a -> Ingame -> Ingame
+storageInsert_ a ingame@(Ingame sto _ _) = setStorage sto' ingame
+    where sto' = insertInMetaList key storageItem sto
           storageItem = toStorage a
           key = storageId storageItem
+
+-- | Insert a Storageable item to the Ingame Storage
+storageInsertA :: Storageable a => a -> Action ()
+storageInsertA sto = replaceIngame $ storageInsert_ sto
 
 -- | Get storage with given key from Ingame
 storageGet :: String -> Ingame -> Maybe Storage
 storageGet key ingame = storageLookup key $ storage ingame
+
+-- | Get storge with given key
+storageGetA :: String -> Action (Maybe Storage)
+storageGetA k = do 
+    ingame <- getIngame
+    return $ storageGet k ingame
 
 -- | Got storage with given key from Storage List
 storageLookup :: String -> [Storage] -> Maybe Storage
@@ -236,23 +335,36 @@ storageLookup key storages = lookup key tupleList
 -- | Translate a storage to a tuple with its key and the storage.
 --   Used for lookup
 storageToTuple :: Storage -> (String, Storage)
-storageToTuple storage@(Storage key _ _) = (key, storage)
+storageToTuple sto@(Storage key _ _) = (key, sto)
 
 -- | Got all Storages which can be transformed to a type
 allOfType :: Storageable a => Ingame -> [a]
 allOfType ingame = catMaybes $ map fromStorage $ storage ingame
 
+-- | Got all 'Storage's which can be fransformed to a type
+allOfTypeA :: Storageable a => Action [a]
+allOfTypeA = do
+    ingame <- getIngame
+    return $ allOfType ingame
+
 
 -- | Insert a list of 'Storage's
-insertStorages :: Storageable a => [a] -> Ingame -> Ingame
-insertStorages xs ingame = foldr insert ingame xs
-    where insert = storageInsert
+insertStoragesA :: Storageable a => [a] -> Action ()
+insertStoragesA xs = replaceIngame $ insertStorages_ xs
+
+insertStorages_ :: Storageable a => [a] -> Ingame -> Ingame
+insertStorages_ xs ingame = foldr insert ingame xs
+    where insert = storageInsert_
+
 
 -- | Remove element from storage
-storageRemove :: String         -- ^ Storage key to remove
+storageRemoveA :: String -> Action ()
+storageRemoveA key = replaceIngame $ storageRemove_ key
+
+storageRemove_ :: String         -- ^ Storage key to remove
               -> Ingame         -- ^ State to edit
               -> Ingame         -- ^ Modified state
-storageRemove key ingame = setStorage storage' ingame
+storageRemove_ key ingame = setStorage storage' ingame
     where storage' = filter removeFn $ storage ingame
           removeFn (Storage storageKey _ _) = storageKey /= key
 

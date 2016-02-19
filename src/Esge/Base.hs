@@ -1,3 +1,4 @@
+{-# OPTIONS -Wall #-}
 {-|
 Module      : Esge.Base
 Description : Highlevel basic esge module.
@@ -108,26 +109,28 @@ roomOfIndividual :: EI.Individual -> EC.Ingame -> ER.Room
 roomOfIndividual ind ingame = roomOfIndividualId (EI.key ind) ingame
 
 -- | Place Individual in other room
-beam :: EI.Individual -> String -> EC.Ingame -> Either Error EC.Ingame
-beam ind roomId ingame = 
+beam :: EI.Individual -> String -> EC.Action (Either Error ())
+beam ind roomId = do
+    ingame <- EC.getIngame
     let indKey = EI.key ind
-        fromRoom = roomOfIndividual ind ingame in
+        fromRoom = roomOfIndividual ind ingame
     case ER.getRoomMaybe ingame roomId of
-    Nothing -> Left $ RoomNotFoundError roomId
-    Just room ->
-        let room' = ER.addIndividualId indKey room
-            fromRoom' = ER.removeIndividualId indKey fromRoom
-            ingame' = EC.storageInsert fromRoom' $
-                        EC.storageInsert room' ingame in
-        Right ingame'
+        Nothing -> return $ Left $ RoomNotFoundError roomId
+        Just room -> do
+            let room' = ER.addIndividualId indKey room
+                fromRoom' = ER.removeIndividualId indKey fromRoom
+            EC.storageInsertA fromRoom'
+            EC.storageInsertA room'
+            return $ Right ()
 
 -- | Move individual through an exit to another room
-move :: EI.Individual -> String -> EC.Ingame -> Either Error EC.Ingame
-move ind exitRoom ingame =
-    let fromRoom = roomOfIndividual ind ingame in
-    if exitRoom `elem` (map fst $ ER.exits fromRoom) then
-        beam ind (maybe "" id $ lookup exitRoom $ ER.exits fromRoom) ingame
-    else Left $ ExitNotFoundError exitRoom
+move :: EI.Individual -> String -> EC.Action (Either Error ())
+move ind exitRoom = do
+    ingame <- EC.getIngame
+    let fromRoom = roomOfIndividual ind ingame
+    if exitRoom `elem` (map fst $ ER.exits fromRoom)
+     then beam ind (maybe "" id $ lookup exitRoom $ ER.exits fromRoom)
+     else return $ Left $ ExitNotFoundError exitRoom
 
 
 -- | Important state values
@@ -144,19 +147,19 @@ nullState = State "" "" ""
 
 -- | State can be stored in 'EC.Ingame'
 instance EC.Storageable State where
-    toStorage state = EC.Storage "state" "esgeState" [
-            ("player", stPlayer state),
-            ("version", stVersion state),
-            ("name", stName state)
+    toStorage st = EC.Storage "state" "esgeState" [
+            ("player", stPlayer st),
+            ("version", stVersion st),
+            ("name", stName st)
         ]
-    fromStorage (EC.Storage key t metas) =
+    fromStorage (EC.Storage _ t metas) =
         if t /= "esgeState" then Nothing
         else do
-            player <- lookup "player" metas
+            ply <- lookup "player" metas
             version <- lookup "version" metas
             name <- lookup "name" metas
             return State {
-                stPlayer = player,
+                stPlayer = ply,
                 stVersion = version,
                 stName = name
             }
@@ -165,8 +168,8 @@ instance EC.Storageable State where
 state :: EC.Ingame -> State
 state ingame = maybe nullState id $ do
     storage <- EC.storageGet "state" ingame
-    state <- EC.fromStorage storage
-    return state
+    st <- EC.fromStorage storage
+    return st
 
 -- | Get player from 'EC.Ingame'
 player :: EC.Ingame -> EI.Individual
@@ -180,76 +183,94 @@ currRoom ingame = roomOfIndividual (player ingame) ingame
 
 
 -- | Print 'Error' to 'EC.Ingame' output response
-printError :: Error -> EC.Ingame -> EC.Ingame
-printError err ingame = EC.setIngameResponse "output" (
+printError :: Error -> EC.Action ()
+printError err = EC.setIngameResponseA "output" (
     case err of
         RoomNotFoundError str -> "Room not found: '" ++ str ++ "'"
         ExitNotFoundError str -> "Exit not found: " ++ str ++ "'"
-    ) ingame
+    )
 
 -- | Move player in 'Room' of behind exit.
-moveRoomAction :: String -> EC.Action
-moveRoomAction exitName ingame =
-    case move (player ingame) exitName ingame of
-         Left err -> printError err ingame
-         Right ingame -> ingame
+moveRoomAction :: String -> EC.Action ()
+moveRoomAction exitName = do
+    ingame <- EC.getIngame
+    res <- move (player ingame) exitName
+    case res of
+         Left err -> printError err
+         Right () -> return ()
 
 -- | Display room
-showRoomAction :: EC.Action
-showRoomAction ingame = EC.setIngameResponse "output" roomText ingame
-    where roomText = ER.title room ++ "\n" ++
-                     ER.desc room ++ "\n" ++
-                     "Exits: " ++ (unwords $ ER.exitNames room)
-          room = currRoom ingame
+showRoomAction :: EC.Action ()
+showRoomAction = do
+    ingame <- EC.getIngame
+    let room = currRoom ingame
+        roomText = ER.title room ++ "\n" ++
+                   ER.desc room ++ "\n" ++
+                   "Exits: " ++ (unwords $ ER.exitNames room)
+    EC.setIngameResponseA "output" roomText
 
 -- | Show individual
-showIndAction :: EI.Individual -> EC.Action
-showIndAction ind ingame = EC.setIngameResponse "output" indText ingame
+showIndAction :: EI.Individual -> EC.Action ()
+showIndAction ind = EC.setIngameResponseA "output" indText
     where indText = EI.name ind
 
 -- | Show state for debugging
-showStateAction :: EC.Action
-showStateAction ingame = EC.setIngameResponse "output" stateText ingame
-    where stateText = show $ state ingame
+showStateAction :: EC.Action ()
+showStateAction = do
+    ingame <- EC.getIngame
+    let stateText = show $ state ingame
+    EC.setIngameResponseA "output" stateText
 
 -- | Show the whole 'Storage'
-showStorageAction :: EC.Action
-showStorageAction ingame = EC.setIngameResponse "output" stateText ingame
-    where stateText = show $ EC.storage ingame
+showStorageAction :: EC.Action ()
+showStorageAction = do
+    ingame <- EC.getIngame
+    let stateText = show $ EC.storage ingame
+    EC.setIngameResponseA "output" stateText
 
 
 
 -- | Run given action and re register
-infinityAction :: EC.Action -> EC.Action
-infinityAction act ingame = EC.scheduleAction self ingame'
-    where ingame' = act ingame
-          self = infinityAction act
+infinityAction :: EC.Action () -> EC.Action ()
+infinityAction act = do
+    let self = infinityAction act
+    EC.replaceIngame $ EC.scheduleAction self
+    act
 
 -- | Run given action only if condition is true
-condInfinityAction :: (EC.Ingame -> Bool) -> EC.Action -> EC.Action
-condInfinityAction condFn act ingame = EC.scheduleAction self ingame'
-    where ingame' = if condFn ingame then act ingame
-                                     else ingame
-          self = condInfinityAction condFn act
+condInfinityAction :: (EC.Ingame -> Bool) -> EC.Action () -> EC.Action ()
+condInfinityAction condFn act = do
+    let self = condInfinityAction condFn act
+    EC.replaceIngame $ EC.scheduleAction self
+    ingame <- EC.getIngame
+    if condFn ingame then act
+                     else return ()
 
 -- | Run given action as long as condition is true, then remove it
-condDropableAction :: (EC.Ingame -> Bool) -> EC.Action -> EC.Action
-condDropableAction condFn act ingame = if condFn ingame 
-                                        then EC.scheduleAction self ingame'
-                                        else ingame
-    where ingame' = act ingame
-          self = condDropableAction condFn act
+condDropableAction :: (EC.Ingame -> Bool) -> EC.Action () -> EC.Action ()
+condDropableAction condFn act = do
+    let self = condDropableAction condFn act
+    ingame <- EC.getIngame
+    if condFn ingame
+     then do
+        EC.replaceIngame $ EC.scheduleAction self
+        act
+     else return ()
 
 -- | Do nothing until the condition becomes true, then run 'Action' once
 --   and remove.
-condSingleAction :: (EC.Ingame -> Bool) -> EC.Action -> EC.Action
-condSingleAction condFn act ingame = if condFn ingame
-                                      then act ingame
-                                      else EC.scheduleAction self ingame
-    where self = condSingleAction condFn act
+condSingleAction :: (EC.Ingame -> Bool) -> EC.Action () -> EC.Action ()
+condSingleAction condFn act = do
+    let self = condSingleAction condFn act
+    ingame <- EC.getIngame
+    if condFn ingame
+     then act
+     else EC.replaceIngame $ EC.scheduleAction self
 
 -- | Wait n times and then run the action
-delayedAction :: Int -> EC.Action -> EC.Action
-delayedAction n act ingame = if n <= 0 then act ingame
-                                       else EC.scheduleAction self ingame
-    where self = delayedAction (n - 1) act
+delayedAction :: Int -> EC.Action () -> EC.Action ()
+delayedAction n act = do
+    let self = delayedAction (n - 1) act
+    if n <= 0 then act
+        else EC.replaceIngame $ EC.scheduleAction self
+

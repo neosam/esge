@@ -32,8 +32,8 @@ defaultStorage = EC.Storage "title" "type" []
 secondStorage :: EC.Storage
 secondStorage = EC.Storage "title" "type2" []
 
-outputAction :: EC.Action
-outputAction ingame = EC.setIngameResponse "output" "test" ingame
+outputAction :: EC.Action ()
+outputAction = do EC.setIngameResponseA "output" "test"
 
 myIndividual :: EI.Individual
 myIndividual = EI.Individual "ind" "Mr. Blub" "This is mister blub"
@@ -51,15 +51,35 @@ myRoom = ER.Room "room" "A room" "This is a room" ["ind"]
                 [("Garage", "garage"), ("Brewery", "brewery")]
                 [("Bitcoin", "coin"), ("Beer", "beer")]
 
+-- | Should only be used during initialization when no other actions are
+--   scheduled.
+runActionsOnIngame :: [EC.Action ()] -> EC.Ingame -> EC.Ingame
+runActionsOnIngame acts ingame =
+    let ingame' = foldr EC.scheduleAction ingame acts
+    in EC.step ingame'
+
+eitherToAction :: EC.Action (Either EB.Error ()) -> EC.Action ()
+eitherToAction act = do
+    res <- act
+    case res of
+        Left err -> do EC.setIngameResponseA "error" $ show err
+        Right _ -> return ()
+
+runEitherOnIngame :: EC.Action (Either EB.Error ()) -> EC.Ingame -> EC.Ingame
+runEitherOnIngame act ingame =
+    runActionsOnIngame [eitherToAction act] ingame
+
 main :: IO ()
 main = hspec $ do
     describe "The core module" $ do
         context "which provides a storage functionality" $ do
             let ingame = EC.defaultIngame
-            let inserted = EC.storageInsert defaultStorage ingame
+            let inserted = runActionsOnIngame
+                            [EC.storageInsertA defaultStorage] ingame
             let storage1 = EC.storageGet "uiae" inserted
             let storage2 = EC.storageGet "title" inserted
-            let inserted2 = EC.storageInsert secondStorage ingame
+            let inserted2 = runActionsOnIngame 
+                            [EC.storageInsertA secondStorage] ingame
             it "should return Nothing if nothing was inserted" $ do
                 storage1 `shouldBe` Nothing
             it "stould return the right inserted value" $ do
@@ -67,7 +87,8 @@ main = hspec $ do
             it "should return the last inserted value" $ do
                 EC.storageGet "title" inserted2 `shouldBe` (Just secondStorage)
             it "should be possible to delete a value" $ do
-                let removed = EC.storageRemove "title" inserted
+                let removed = runActionsOnIngame
+                        [EC.storageRemoveA "title"] inserted
                     hopefullyNothing = EC.storageGet "title" removed
                 hopefullyNothing `shouldBe` Nothing
         context "which provides a action and response functionality" $ do
@@ -144,38 +165,40 @@ main = hspec $ do
         context "which can handle rooms and individuals" $ do
             let room2 = ER.Room "brewery" "Room 2" "..." ["anna"] [] []
                 anna = EI.Individual "anna" "Anna" ".." (0, 0) (0, 0) []
-                ingame = EC.storageInsert myIndividual $
-                            EC.storageInsert myRoom $
-                            EC.storageInsert room2 $
-                            EC.storageInsert anna EC.defaultIngame
+                ingame = runActionsOnIngame [EC.storageInsertA myIndividual,
+                            EC.storageInsertA myRoom,
+                            EC.storageInsertA room2,
+                            EC.storageInsertA anna] EC.defaultIngame
             it "knows which individuals are in a spacific room" $ do
                 EB.individualsInRoom myRoom ingame `shouldBe`
                     Just [myIndividual]
             it "knows in which room an individual is" $ do
                 EB.roomOfIndividual myIndividual ingame `shouldBe` myRoom
             it "should be able to switch a person to another room" $ do
-                let eitherIngame = EB.beam myIndividual "brewery" ingame
-                case eitherIngame of
-                    Left err -> expectationFailure $ show err
-                    Right ingame' -> do
+                let ingame' = runEitherOnIngame 
+                                (EB.beam myIndividual "brewery") ingame
+                case EC.getIngameResponse "error" ingame' of
+                    "" -> do
                         let room = EB.roomOfIndividual
                                             myIndividual ingame' :: ER.Room
                             room' = ER.getRoom ingame' "room" :: ER.Room
                         ER.key room `shouldBe` "brewery"
                         ER.individual room' `shouldSatisfy`
                             (\x -> not $ elem "ind" x)
+                    err -> expectationFailure $ show err
+
             it "will move a person only if its room is connected by exits" $ do
-                let moveStorage = do
-                        ingame' <- EB.move myIndividual "Brewery" ingame
-                        return $ EC.storage ingame'
-                    beamStorage = do
-                        ingame' <- EB.beam myIndividual "brewery" ingame
-                        return $ EC.storage ingame'
+                let ingame' = runEitherOnIngame
+                            (EB.move myIndividual "Brewery") ingame
+                    moveStorage = EC.storage ingame'
+                    ingame'' = runEitherOnIngame
+                            (EB.beam myIndividual "brewery") ingame
+                    beamStorage = EC.storage ingame''
                 moveStorage `shouldBe` beamStorage
             it "will let a person pick something up" $ do
                 pendingWith "future version"
         context "which provides some acions" $ do
-            let myAction ingame = EC.setIngameResponse "output" "foo" ingame
+            let myAction = outputAction
                 ing = EC.defaultIngame
                 test ingame = case EC.storageGet "ind" ingame of
                     Nothing -> False
@@ -184,54 +207,60 @@ main = hspec $ do
                 let ingame = EC.scheduleAction act ing
                     act = EB.infinityAction myAction
                 let ingame' = EC.step ingame
-                EC.getIngameResponse "output" ingame' `shouldBe` "foo"
+                EC.getIngameResponse "output" ingame' `shouldBe` "test"
                 let ingame'' = EC.step ingame'
-                EC.getIngameResponse "output" ingame'' `shouldBe` "foo"
+                EC.getIngameResponse "output" ingame'' `shouldBe` "test"
             it "will provide a conditional infinity action" $ do
-                let ingame = EC.scheduleAction act 
-                                $ EC.storageInsert myIndividual ing
+                let ingame = runActionsOnIngame [act,
+                                EC.storageInsertA myIndividual] ing
                     act = EB.condInfinityAction test myAction
                 let ingame' = EC.step ingame
-                EC.getIngameResponse "output" ingame' `shouldBe` "foo"
+                EC.getIngameResponse "output" ingame' `shouldBe` "test"
                 let ingame'' = EC.step ingame
-                EC.getIngameResponse "output" ingame'' `shouldBe` "foo"
-                let ingame'3 = EC.storageRemove "ind" ingame''
+                EC.getIngameResponse "output" ingame'' `shouldBe` "test"
+                let ingame'3 = runActionsOnIngame
+                                    [EC.storageRemoveA "ind"] ingame''
                 let ingame'4 = EC.step ingame'3
                 EC.getIngameResponse "output" ingame'4 `shouldBe` ""
                 let ingame'5 = EC.step ingame'4
                 EC.getIngameResponse "output" ingame'5 `shouldBe` ""
-                let ingame'6 = EC.storageInsert myIndividual ingame'5
+                let ingame'6 = runActionsOnIngame
+                                    [EC.storageInsertA myIndividual] ingame'5
                 let ingame'7 = EC.step ingame'6
-                EC.getIngameResponse "output" ingame'7 `shouldBe` "foo"
+                EC.getIngameResponse "output" ingame'7 `shouldBe` "test"
             it "will provide a conditional dropable action" $ do
-                let ingame = EC.scheduleAction act 
-                                $ EC.storageInsert myIndividual ing
+                let ingame = runActionsOnIngame [act,
+                                EC.storageInsertA myIndividual] ing
                     act = EB.condDropableAction test myAction
                 let ingame' = EC.step ingame
-                EC.getIngameResponse "output" ingame' `shouldBe` "foo"
+                EC.getIngameResponse "output" ingame' `shouldBe` "test"
                 let ingame'' = EC.step ingame
-                EC.getIngameResponse "output" ingame'' `shouldBe` "foo"
-                let ingame'3 = EC.storageRemove "ind" ingame''
+                EC.getIngameResponse "output" ingame'' `shouldBe` "test"
+                let ingame'3 = runActionsOnIngame [
+                                EC.storageRemoveA "ind"] ingame''
                 let ingame'4 = EC.step ingame'3
                 EC.getIngameResponse "output" ingame'4 `shouldBe` ""
                 let ingame'5 = EC.step ingame'4
                 EC.getIngameResponse "output" ingame'5 `shouldBe` ""
-                let ingame'6 = EC.storageInsert myIndividual ingame'5
+                let ingame'6 = runActionsOnIngame [
+                                EC.storageInsertA myIndividual] ingame'5
                 let ingame'7 = EC.step ingame'6
                 EC.getIngameResponse "output" ingame'7 `shouldBe` ""
             it "will provide a conditional single action" $ do
-                let ingame = EC.scheduleAction act ing
+                let ingame = runActionsOnIngame [act] ing
                     act = EB.condSingleAction test myAction
                 let ingame' = EC.step ingame
                 EC.getIngameResponse "output" ingame' `shouldBe` ""
                 let ingame'' = EC.step ingame
                 EC.getIngameResponse "output" ingame'' `shouldBe` ""
-                let ingame'3 = EC.storageInsert myIndividual ingame''
+                let ingame'3 = runActionsOnIngame [
+                                EC.storageInsertA myIndividual] ingame''
                 let ingame'4 = EC.step ingame'3
-                EC.getIngameResponse "output" ingame'4 `shouldBe` "foo"
+                EC.getIngameResponse "output" ingame'4 `shouldBe` "test"
                 let ingame'5 = EC.step ingame'4
                 EC.getIngameResponse "output" ingame'5 `shouldBe` ""
-                let ingame'6 = EC.storageRemove "ind" ingame'5
+                let ingame'6 = runActionsOnIngame [
+                                EC.storageRemoveA "ind"] ingame'5
                 let ingame'7 = EC.step ingame'6
                 EC.getIngameResponse "output" ingame'7 `shouldBe` ""
 
@@ -244,7 +273,8 @@ main = hspec $ do
                     Nothing -> Left "ind not found"
                     Just _ -> Right ()
                 emptyIngame = EC.defaultIngame
-                indIngame = EC.storageInsert myIndividual emptyIngame
+                indIngame = runActionsOnIngame [
+                    EC.storageInsertA myIndividual] emptyIngame
             it "should be no error if the check returns Right ()" $ do
                 ERun.plausabilityCheck [pCheckGood] emptyIngame
                                                     `shouldBe` Right ()

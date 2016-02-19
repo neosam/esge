@@ -1,3 +1,4 @@
+{-# OPTIONS -Wall #-}
 {-|
 Module      : Esge.Terminal
 Description : IO module for textadvanture like user interaction..
@@ -74,21 +75,22 @@ defaultTerminal = Terminal {
 
 -- | Check game is quit
 isDone :: EC.Ingame -> Bool
-isDone ingame = case EC.storageGet "done" ingame of
+isDone ing = case EC.storageGet "done" ing of
     Just _ -> True
     Nothing -> False
 
 -- | Replace Ingame in Terminal
 setIngame :: EC.Ingame -> Terminal -> Terminal
-setIngame ingame terminal = terminal { ingame = ingame }
+setIngame ing terminal = terminal { ingame = ing }
 
 -- | Set if game is quit
-setDone :: EC.Ingame -> EC.Ingame
-setDone ingame = EC.storageInsert (EC.StoreBool ("done", True)) ingame
+setDone :: EC.Action ()
+setDone = do EC.storageInsertA (EC.StoreBool ("done", True))
 
 -- | Run default user interaction loop
 repl :: Terminal -> IO Terminal
-repl terminal = if isDone $ ingame terminal
+repl terminal = do
+    if isDone $ ingame terminal
                     then return terminal
                     else do
                         terminal' <- step terminal
@@ -139,7 +141,7 @@ modifyIngame fn terminal = terminal { ingame = fn $ ingame terminal }
 
 -- | Command which quits the game
 quitCommand :: Command
-quitCommand _ term = return (modifyIngame setDone term, False)
+quitCommand = actionCmd setDone
 
 
 -- | Get the nth word from String
@@ -148,20 +150,20 @@ arg str i = words str !! i
 
 -- | Generate 'Command' to manipulite Ingame
 ingameCmd :: (String -> EC.Ingame -> EC.Ingame) -> Command
-ingameCmd mod cmd term = return $ (modifyIngame modifier term, True)
-    where modifier = mod cmd
+ingameCmd modf cmd term = return $ (modifyIngame modifier term, True)
+    where modifier = modf cmd
 
 
 -- | Command which schedules the 'Action' for next iteration.
-actionCmd :: EC.Action -> Command
-actionCmd action = ingameCmd mod
-    where mod _ ingame = EC.scheduleAction action ingame
+actionCmd :: EC.Action () -> Command
+actionCmd action = ingameCmd modf
+    where modf _ ing = EC.scheduleAction action ing
 
 -- | More advanced 'Action' scheduling 'Command' generator.
 --
 -- It receives a function, which takes the command and the ingame
 -- but no terminal.
-actionIngameCmd :: (String -> EC.Ingame -> EC.Action) -> Command
+actionIngameCmd :: (String -> EC.Ingame -> EC.Action ()) -> Command
 actionIngameCmd fn cmd term = actionCmd (fn cmd $ ingame term) cmd term
 
 
@@ -172,7 +174,7 @@ showRoomCmd = actionCmd EB.showRoomAction
 -- | Show player
 showPlayerCmd :: Command
 showPlayerCmd = actionIngameCmd showPlayer
-    where showPlayer _ ingame = EB.showIndAction $ EB.player ingame
+    where showPlayer _ ing = EB.showIndAction $ EB.player ing
 
 -- | Display state for debugging
 showStateCmd :: Command
@@ -185,6 +187,6 @@ showStorageCmd = actionCmd EB.showStorageAction
 -- | Move player to given exit
 moveCmd :: Command
 moveCmd = actionIngameCmd fn
-    where fn cmd ingame = EB.moveRoomAction $ exit cmd
+    where fn cmd _ = EB.moveRoomAction $ exit cmd
           exit cmd = arg cmd 1
 
