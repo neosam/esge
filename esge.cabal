@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                esge
-version:             0.2.0.0
+version:             0.3.0.0
 synopsis:            Evolutionary Story based Game Engine
 -- description:         
 license:             BSD3
