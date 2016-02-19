@@ -6,9 +6,7 @@ name: Test Adventure
 New individual susan
 name: Susan
 desc: You are Susan
-health: 100,100
 items:
-mana: 0,0
 
 New room bedroom
 title: Your bedroom
